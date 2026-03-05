@@ -1,0 +1,365 @@
+from flask import Flask, request, redirect, render_template_string
+import uuid
+
+app = Flask(__name__)
+
+users=[]
+chat=[]
+booking=[]
+rating=[]
+
+platform_name="Com_Musisi"
+
+kategori_list=[
+"Penyanyi",
+"Mendang",
+"Player",
+"MC",
+"Sound System",
+"Tratag",
+"Lighting",
+"Organ Tunggal",
+"Videografer",
+"Decoration"
+]
+
+home="""
+<h1>Com_Musisi</h1>
+
+<h3>Daftar Akun Musisi</h3>
+
+<form method="post" action="/register">
+
+Nama<br>
+<input name="nama"><br>
+
+Kategori<br>
+<select name="kategori">
+""" + "".join([f"<option>{k}</option>" for k in kategori_list]) + """
+
+</select><br>
+
+Alamat<br>
+<input name="alamat"><br>
+
+Status<br>
+<input name="status"><br>
+
+Foto Profil (link gambar)<br>
+<input name="foto"><br>
+
+Password<br>
+<input name="password"><br><br>
+
+<button>Daftar</button>
+
+</form>
+
+<hr>
+
+<h3>Login</h3>
+
+<form method="post" action="/login">
+
+Nama<br>
+<input name="nama"><br>
+
+Password<br>
+<input name="password"><br><br>
+
+<button>Login</button>
+
+</form>
+"""
+
+@app.route("/")
+def index():
+    return render_template_string(home)
+
+@app.route("/register",methods=["POST"])
+def register():
+
+    users.append({
+        "id":str(uuid.uuid4()),
+        "nama":request.form["nama"],
+        "kategori":request.form["kategori"],
+        "alamat":request.form["alamat"],
+        "status":request.form["status"],
+        "foto":request.form["foto"],
+        "password":request.form["password"]
+    })
+
+    return redirect("/")
+
+@app.route("/login",methods=["POST"])
+def login():
+
+    nama=request.form["nama"]
+    password=request.form["password"]
+
+    for u in users:
+        if u["nama"]==nama and u["password"]==password:
+            return redirect("/dashboard/"+nama)
+
+    return "Login gagal"
+
+@app.route("/dashboard/<login>")
+def dashboard(login):
+
+    page=f"<h2>Dashboard {login}</h2>"
+
+    page+=f"""
+<form method="post" action="/cari/{login}">
+Cari Musisi
+<input name="cari">
+<button>Cari</button>
+</form>
+<hr>
+"""
+
+    for k in kategori_list:
+
+        page+=f"<h3>{k}</h3>"
+
+        for u in users:
+
+            if u["kategori"]==k:
+
+                page+=f"""
+
+<div style="border:1px solid #ccc;padding:10px;margin:10px;width:250px">
+
+<img src="{u['foto']}" width="80"><br>
+
+<b>{u['nama']}</b><br>
+
+{u['status']}<br>
+
+<a href="/profil/{login}/{u['nama']}">Lihat Profil</a>
+
+</div>
+
+"""
+
+    return page
+
+@app.route("/cari/<login>",methods=["POST"])
+def cari(login):
+
+    keyword=request.form["cari"]
+
+    page="<h2>Hasil Pencarian</h2>"
+
+    for u in users:
+
+        if keyword.lower() in u["nama"].lower():
+
+            page+=f"""
+
+<img src="{u['foto']}" width=60>
+
+<a href="/profil/{login}/{u['nama']}">
+
+{u['nama']}
+
+</a><br>
+
+"""
+
+    return page
+
+@app.route("/profil/<login>/<nama>")
+def profil(login,nama):
+
+    for u in users:
+
+        if u["nama"]==nama:
+
+            page=f"""
+
+<h2>{u['nama']}</h2>
+
+<img src="{u['foto']}" width="150"><br>
+
+Kategori : {u['kategori']}<br>
+Alamat : {u['alamat']}<br>
+Status : {u['status']}<br>
+
+<hr>
+
+<h3>Booking Musisi</h3>
+
+<form method="post" action="/booking/{login}/{nama}">
+
+Tanggal Acara<br>
+<input name="tanggal"><br>
+
+Lokasi<br>
+<input name="lokasi"><br>
+
+Keterangan<br>
+<input name="ket"><br>
+
+Metode Booking<br>
+
+<select name="metode">
+<option>DP</option>
+<option>NON DP</option>
+</select><br><br>
+
+<button>Booking</button>
+
+</form>
+
+<hr>
+
+<h3>Chat</h3>
+
+<form method="post" action="/chat/{login}/{nama}">
+<input name="pesan">
+<button>Kirim</button>
+</form>
+
+<hr>
+"""
+
+            page+="<h3>Riwayat Booking</h3>"
+
+            for b in booking:
+
+                if b["tujuan"]==nama:
+
+                    page+=f"""
+
+Pemesan : {b['pemesan']}<br>
+Tanggal : {b['tanggal']}<br>
+Lokasi : {b['lokasi']}<br>
+Metode : {b['metode']}<br>
+Status : {b['status']}<br>
+
+"""
+
+                    if b["status"]=="MENUNGGU":
+
+                        page+=f"""
+<a href="/terima/{b['id']}">TERIMA</a>
+<a href="/tolak/{b['id']}">TOLAK</a>
+"""
+
+                    page+="<hr>"
+
+            page+="<h3>Chat Masuk</h3>"
+
+            for c in chat:
+
+                if c["tujuan"]==nama:
+
+                    page+=c["pengirim"]+" : "+c["pesan"]+"<br>"
+
+            page+="<hr><h3>Rating</h3>"
+
+            total=0
+            jml=0
+
+            for r in rating:
+
+                if r["nama"]==nama:
+
+                    total+=int(r["nilai"])
+                    jml+=1
+
+            if jml>0:
+
+                page+="Rating : "+str(round(total/jml,1))
+
+            return page
+
+    return "User tidak ditemukan"
+
+@app.route("/chat/<login>/<nama>",methods=["POST"])
+def chat_kirim(login,nama):
+
+    chat.append({
+        "pengirim":login,
+        "tujuan":nama,
+        "pesan":request.form["pesan"]
+    })
+
+    return redirect("/profil/"+login+"/"+nama)
+
+@app.route("/booking/<login>/<nama>",methods=["POST"])
+def booking_job(login,nama):
+
+    tanggal=request.form["tanggal"]
+
+    for b in booking:
+
+        if b["tujuan"]==nama and b["tanggal"]==tanggal:
+
+            return "Tanggal sudah dibooking"
+
+    data={
+        "id":str(uuid.uuid4()),
+        "pemesan":login,
+        "tujuan":nama,
+        "tanggal":tanggal,
+        "lokasi":request.form["lokasi"],
+        "ket":request.form["ket"],
+        "metode":request.form["metode"],
+        "status":"MENUNGGU"
+    }
+
+    booking.append(data)
+
+    if request.form["metode"]=="DP":
+
+        return redirect("/pembayaran/"+login)
+
+    return redirect("/dashboard/"+login)
+
+@app.route("/pembayaran/<login>")
+def pembayaran(login):
+
+    return f"""
+
+<h2>Pembayaran DP</h2>
+
+Transfer melalui:
+
+BRI<br>
+1234567890<br>
+a.n Com_Musisi<br><br>
+
+DANA<br>
+08123456789<br><br>
+
+OVO<br>
+08123456789<br><br>
+
+<a href="/dashboard/{login}">Kembali</a>
+
+"""
+
+@app.route("/terima/<id>")
+def terima(id):
+
+    for b in booking:
+
+        if b["id"]==id:
+
+            b["status"]="DITERIMA"
+
+    return redirect("/")
+
+@app.route("/tolak/<id>")
+def tolak(id):
+
+    for b in booking:
+
+        if b["id"]==id:
+
+            b["status"]="DITOLAK"
+
+    return redirect("/")
+
+app.run()
